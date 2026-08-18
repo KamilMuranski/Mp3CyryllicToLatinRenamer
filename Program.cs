@@ -13,6 +13,12 @@ namespace CyryllicToLatinRenamer
         static readonly Regex AlbumPattern = new Regex(@"^(\d{4})\s-\s(.+)$", RegexOptions.Compiled);
         static readonly Regex TrackPattern = new Regex(@"^(\d{2})\s-\s(.+)$", RegexOptions.Compiled);
 
+        // Jedyne rozpoznawane dopiski na końcu nazwy albumu
+        static readonly string[] AlbumSuffixes = { "Live", "Compilation", "Split" };
+        static readonly Regex TrailingSuffixPattern = new Regex(
+            @"^(?<base>.*)\((?<suffix>Live|Compilation|Split)\)\s*$",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
         static void Main()
         {
             // Wymuś UTF-8 w konsoli
@@ -24,21 +30,10 @@ namespace CyryllicToLatinRenamer
 
             try
             {
-                // Szukamy wszystkich katalogów, które wyglądają na albumy "YYYY - Tytuł"
-                var albumDirs = Directory.GetDirectories(root, "*", SearchOption.AllDirectories)
-                                         .Where(d => AlbumPattern.IsMatch(Path.GetFileName(d)))
-                                         .ToList();
-
-                Console.WriteLine($"Znaleziono {albumDirs.Count} katalogów albumów.");
-
-                foreach (var albumDir in albumDirs)
-                {
-                    // 1) Zmień nazwę folderu albumu (jeśli trzeba)
-                    string currentAlbumPath = RenameAlbumFolder(albumDir);
-
-                    // 2) Zmień nazwy wszystkich plików wewnątrz albumu (rekurencyjnie), ale nie folderów
-                    RenameFiles(currentAlbumPath);
-                }
+                // Przechodzimy drzewo katalogów od góry: gatunek -> zespół -> "YYYY - Tytuł" -> pliki.
+                // Każdy poziom może wymagać transliteracji (zespół i album), więc zmieniamy nazwy
+                // "z góry na dół", żeby ścieżki dzieci zawsze odpowiadały już zmienionym rodzicom.
+                ProcessDirectory(root, isRoot: true);
             }
             catch (Exception ex)
             {
@@ -49,67 +44,149 @@ namespace CyryllicToLatinRenamer
             Console.ReadKey();
         }
 
-        static string RenameAlbumFolder(string albumDir)
+        static void ProcessDirectory(string dir, bool isRoot)
         {
-            string parent = Path.GetDirectoryName(albumDir) ?? "";
-            string folderName = Path.GetFileName(albumDir);
+            string currentDir = isRoot ? dir : RenameDirectoryIfNeeded(dir);
 
-            var m = AlbumPattern.Match(folderName);
-            if (!m.Success) return albumDir; // nie wygląda na "YYYY - Tytuł"
-
-            string year = m.Groups[1].Value;
-            string titleCyr = m.Groups[2].Value;
-
-            string titleLat = TransliterateCyrillic(titleCyr);
-
-            // jeśli transliteracja nic nie zmienia – nie ruszaj folderu
-            if (string.Equals(titleLat, titleCyr, StringComparison.Ordinal))
-                return albumDir;
-
-            string newName = $"{year} - {titleLat} ({titleCyr})";
-            string newPath = Path.Combine(parent, newName);
-
-            if (!string.Equals(albumDir, newPath, StringComparison.Ordinal))
+            string[] subDirs;
+            try
             {
-                try
-                {
-                    Directory.Move(albumDir, newPath);
-                    Console.WriteLine($"[ALBUM] {folderName} -> {newName}");
-                    return newPath;
-                }
-                catch (Exception ex)
-                {
-                    Console.Error.WriteLine($"Błąd zmiany nazwy folderu '{albumDir}' -> '{newPath}': {ex.Message}");
-                    return albumDir; // kontynuuj z oryginalną ścieżką
-                }
+                subDirs = Directory.GetDirectories(currentDir);
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"Błąd listowania katalogów w '{currentDir}': {ex.Message}");
+                return;
             }
 
-            return albumDir;
+            foreach (var sub in subDirs)
+                ProcessDirectory(sub, isRoot: false);
+
+            RenameFilesInDirectory(currentDir);
         }
 
-        static void RenameFiles(string albumDir)
+        /// <summary>
+        /// Zmienia nazwę pojedynczego katalogu (zespół, album...) na podstawie samej jego nazwy.
+        /// Foldery "YYYY - Tytuł" dostają specjalną obsługę roku i końcowego dopisku
+        /// (Live/Compilation/Split); pozostałe (np. nazwa zespołu) są tłumaczone wprost.
+        /// </summary>
+        static string RenameDirectoryIfNeeded(string path)
+        {
+            string parent = Path.GetDirectoryName(path) ?? "";
+            string name = Path.GetFileName(path);
+
+            string newName;
+
+            var m = AlbumPattern.Match(name);
+            if (m.Success)
+            {
+                string year = m.Groups[1].Value;
+                string baseTitle = m.Groups[2].Value;
+
+                string? suffix = ExtractTrailingSuffix(ref baseTitle);
+                string finalTitle = BuildTranslatedTitle(baseTitle);
+
+                newName = suffix != null
+                    ? $"{year} - {finalTitle} ({suffix})"
+                    : $"{year} - {finalTitle}";
+            }
+            else
+            {
+                newName = BuildTranslatedTitle(name);
+            }
+
+            if (string.Equals(newName, name, StringComparison.Ordinal))
+                return path;
+
+            string newPath = Path.Combine(parent, newName);
+            try
+            {
+                Directory.Move(path, newPath);
+                Console.WriteLine($"[DIR] {name} -> {newName}");
+                return newPath;
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"Błąd zmiany nazwy folderu '{path}' -> '{newPath}': {ex.Message}");
+                return path; // kontynuuj z oryginalną ścieżką
+            }
+        }
+
+        /// <summary>
+        /// Wykrywa i usuwa jeden końcowy dopisek "(Live)"/"(Compilation)"/"(Split)".
+        /// Zwraca skanoniczną nazwę dopisku (albo null, jeśli go nie ma) i przycina
+        /// przekazany tytuł tak, by dopisek nie trafił do części transliterowanej.
+        /// </summary>
+        static string? ExtractTrailingSuffix(ref string title)
+        {
+            var m = TrailingSuffixPattern.Match(title);
+            if (!m.Success) return null;
+
+            string suffix = AlbumSuffixes.First(s =>
+                string.Equals(s, m.Groups["suffix"].Value, StringComparison.OrdinalIgnoreCase));
+
+            title = m.Groups["base"].Value.TrimEnd();
+            return suffix;
+        }
+
+        /// <summary>
+        /// Buduje "TytułŁacinką (TytułCyrylicą)" dla dowolnego tytułu (zespół, album, utwór, plik).
+        /// Nie rusza tytułów bez cyrylicy ani takich, które są już w tym formacie (bezpieczne
+        /// dla wielokrotnego uruchomienia).
+        /// </summary>
+        static string BuildTranslatedTitle(string title)
+        {
+            if (!HasCyrillic(title))
+                return title;
+
+            if (IsAlreadyTranslated(title))
+                return title;
+
+            string lat = TransliterateCyrillic(title);
+            if (string.Equals(lat, title, StringComparison.Ordinal))
+                return title;
+
+            return $"{lat} ({title})";
+        }
+
+        /// <summary>
+        /// Sprawdza, czy tytuł ma już postać "Lat (Cyr)", gdzie część łacińska jest
+        /// dokładnie transliteracją części cyrylickiej – wtedy nie ma czego zmieniać.
+        /// </summary>
+        static bool IsAlreadyTranslated(string title)
+        {
+            var m = Regex.Match(title, @"^(?<lat>.+?)\s\((?<cyr>.+)\)$");
+            if (!m.Success) return false;
+
+            string lat = m.Groups["lat"].Value;
+            string cyr = m.Groups["cyr"].Value;
+
+            return !HasCyrillic(lat) && HasCyrillic(cyr) &&
+                   string.Equals(TransliterateCyrillic(cyr), lat, StringComparison.Ordinal);
+        }
+
+        static void RenameFilesInDirectory(string dir)
         {
             IEnumerable<string> files;
             try
             {
-                files = Directory.GetFiles(albumDir, "*.*", SearchOption.AllDirectories)
+                files = Directory.GetFiles(dir, "*.*", SearchOption.TopDirectoryOnly)
                                  .Where(IsSupportedFile)
                                  .ToList();
             }
             catch (Exception ex)
             {
-                Console.Error.WriteLine($"Błąd listowania plików w '{albumDir}': {ex.Message}");
+                Console.Error.WriteLine($"Błąd listowania plików w '{dir}': {ex.Message}");
                 return;
             }
 
             foreach (var path in files)
             {
-                string dir = Path.GetDirectoryName(path) ?? "";
                 string fileName = Path.GetFileName(path);
                 string nameNoExt = Path.GetFileNameWithoutExtension(fileName);
                 string ext = Path.GetExtension(fileName);
 
-                string newFileName = fileName; // domyślnie bez zmian
+                string newNameNoExt;
 
                 var t = TrackPattern.Match(nameNoExt);
                 if (t.Success)        // NN - Tytuł
@@ -119,28 +196,14 @@ namespace CyryllicToLatinRenamer
 
                     // Najpierw spróbuj specjalnej logiki dla "cover"
                     string? special = BuildCoverTitle(nn, rawTitle);
-                    if (special != null)
-                    {
-                        newFileName = special + ext;
-                    }
-                    else
-                    {
-                        string titleCyr = rawTitle;
-                        string titleLat = TransliterateCyrillic(titleCyr);
-
-                        if (!string.Equals(titleLat, titleCyr, StringComparison.Ordinal))
-                            newFileName = $"{nn} - {titleLat} ({titleCyr}){ext}";
-                    }
+                    newNameNoExt = special ?? $"{nn} - {BuildTranslatedTitle(rawTitle)}";
                 }
                 else                   // okładki/obrazy i inne pliki
                 {
-                    string titleCyr = nameNoExt;
-                    string titleLat = TransliterateCyrillic(titleCyr);
-
-                    if (!string.Equals(titleLat, titleCyr, StringComparison.Ordinal))
-                        newFileName = $"{titleLat} ({titleCyr}){ext}";
+                    newNameNoExt = BuildTranslatedTitle(nameNoExt);
                 }
 
+                string newFileName = newNameNoExt + ext;
                 string newPath = Path.Combine(dir, newFileName);
                 if (!string.Equals(path, newPath, StringComparison.Ordinal))
                 {
