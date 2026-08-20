@@ -13,10 +13,10 @@ namespace CyryllicToLatinRenamer
         static readonly Regex AlbumPattern = new Regex(@"^(\d{4})\s-\s(.+)$", RegexOptions.Compiled);
         static readonly Regex TrackPattern = new Regex(@"^(\d{2})\s-\s(.+)$", RegexOptions.Compiled);
 
-        // Jedyne rozpoznawane dopiski na końcu nazwy albumu
-        static readonly string[] AlbumSuffixes = { "Live", "Compilation", "Split" };
+        // Rozpoznawane dopiski na końcu nazwy albumu (ta sama lista co w PrepareFoldersAndFilesNames)
+        static readonly string[] AlbumSuffixes = { "Compilation", "Single", "Live", "Split", "2CD", "3CD", "4CD", "5CD" };
         static readonly Regex TrailingSuffixPattern = new Regex(
-            @"^(?<base>.*)\((?<suffix>Live|Compilation|Split)\)\s*$",
+            @"^(?<base>.*)\((?<suffix>Compilation|Single|Live|Split|2CD|3CD|4CD|5CD)\)\s*$",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         static void Main()
