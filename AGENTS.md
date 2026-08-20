@@ -1,88 +1,111 @@
-# CyryllicToLatinRenamer
+# CyryllicToLatinRenamer - specyfikacja techniczna dla agenta
 
-Konsolowa aplikacja .NET 9, która rekurencyjnie przechodzi przez strukturę folderów
-z muzyką i zmienia nazwy folderów oraz plików zapisane cyrylicą tak, by miały postać
-`Łacinka (Cyrylica)`. Uruchamiana bezpośrednio z folderu z EXE (np.
-`bin\Debug\net9.0`), który traktowany jest jako korzeń przeszukiwania — sam nie jest
-zmieniany.
+Ten plik jest krótkim startem dla agenta. Pełny opis działania aplikacji z perspektywy
+użytkownika jest w `Dokumentacja.md`. Czytaj go, gdy zadanie dotyczy zachowania programu,
+reguł nazewnictwa albo trzeba zweryfikować format nazw wejściowych/wyjściowych.
 
-## Oczekiwana struktura folderów
+## Najważniejsze zasady pracy
 
-```
-<folder z EXE>/
-  Gatunek/                          np. "Folk metal" — nie jest zmieniany, jeśli nie ma cyrylicy
-    Zespół (cyrylica)/              zostaje przetłumaczony na "ZespółŁac (ZespółCyr)"
-      YYYY - Tytuł albumu/          zostaje przetłumaczony wg zasad opisanych niżej
-        NN - Tytuł utworu.mp3
-        Okładka.jpg
-```
+- Pracuj wyłącznie na obecnym kodzie. Nie rób commitów i nie przełączaj brancha.
+- Jeżeli prompt nie pasuje do projektu CyryllicToLatinRenamer, powiedz o tym przed dalszą pracą.
+- Zmieniaj tylko pliki konieczne do zadania. Preferuj małe, lokalne zmiany.
+- Kod i stringi aplikacji pisz po angielsku (poza polskimi komunikatami konsoli, które już
+  tam są). Rozmowę prowadź po polsku.
+- Nie dodawaj mechanizmów naprawy plików/folderów zepsutych przez starą wersję programu
+  (podwójne dopiski typu `... (Compilation) (Cyrylica (Compilation))`). To osobne zadanie
+  naprawcze na danych, nie zmiana kodu.
+- Program działa na realnych plikach pod katalogiem, w którym leży. Do testów manualnych
+  używaj kopii danych, nigdy jedynej kopii kolekcji użytkownika.
+- Nie twórz cache ani artefaktów testowych w tym folderze.
 
-Program obsługuje dowolną głębokość zagnieżdżenia i przetwarza katalogi **od góry do
-dołu** — najpierw zmienia nazwę folderu nadrzędnego, dopiero potem wchodzi do środka
-(bo ścieżki dzieci muszą odpowiadać już zmienionej nazwie rodzica).
+## Terminal i Windows
 
-## Zasady zmiany nazw
+- System autora: Windows 11 64 bit.
+- Nie uruchamiaj destrukcyjnych komend typu `git reset --hard`, `git clean`, kasowanie
+  katalogów poza własnymi katalogami testowymi.
 
-### Foldery zespołu (i inne foldery bez wzorca roku)
+## Stack projektu
 
-Dowolny folder, którego nazwa nie pasuje do wzorca albumu (`YYYY - Tytuł`), jest
-tłumaczony wprost: `NazwaŁac (NazwaCyr)`. Jeśli nazwa nie zawiera żadnych znaków
-cyrylicy (np. nazwa gatunku „Folk metal”), pozostaje bez zmian.
+- Aplikacja konsolowa, jeden plik `CyryllicToLatinRenamer.py`, czysta biblioteka
+  standardowa Pythona (3.9+). Zero zależności, zero budowania - uruchamiana dwuklikiem
+  (Windows odpala ją zarejestrowanym `py.exe`).
+- Katalogiem roboczym jest folder, w którym leży uruchomiony plik `.py`
+  (`Path(__file__).resolve().parent`) - nie bieżący katalog terminala. Nazwę pliku można
+  dowolnie zmieniać (np. dopisać prefiks numeru kroku pipeline'u).
+- Do testów manualnych kopiuj `CyryllicToLatinRenamer.py` razem z danymi testowymi do
+  osobnego katalogu i uruchamiaj stamtąd (`python CyryllicToLatinRenamer.py`).
 
-### Foldery albumów: `YYYY - Tytuł`
+## Pozycja w pipeline użytkownika
 
-Rozpoznawane wzorcem `^(\d{4})\s-\s(.+)$`. Tytuł jest tłumaczony jak wyżej
-(`TytułŁac (TytułCyr)`), ale najpierw program sprawdza, czy na samym końcu tytułu
-występuje jeden z trzech rozpoznawanych dopisków: `(Live)`, `(Compilation)`,
-`(Split)` (bez rozróżniania wielkości liter). Jeśli tak — dopisek jest **wycinany
-przed transliteracją** i doklejany dokładnie raz, na samym końcu nowej nazwy:
+Ten program to krok 3 z 4 w pipeline porządkowania pobranej muzyki (patrz `Dokumentacja.md`
+w tym repo po pełny opis pipeline'u). Krok ten jest **często pomijany** przez użytkownika,
+gdy w kolekcji nie ma nic zapisanego cyrylicą. Krok 4 (`Mp3TagsSetter`) bierze nazwy
+folderów/plików TAKIE, JAKIE SĄ po tym kroku i wpisuje je wprost do tagów ID3 (m.in. artysta
+= nazwa folderu zespołu, album = nazwa folderu albumu bez roku i bez tagu na końcu) — jeśli
+ten krok przetłumaczy folder zespołu na `Zespół (Кириллица)`, dokładnie taki string trafi do
+tagu Artist/AlbumArtist. To nie jest tu naprawiane (nie było proszone) — jeśli użytkownik
+zgłosi, że tagi ID3 zawierają cyrylicę w nawiasie, to świadomy kompromis tego programu, a
+nie bug w nim samym.
 
-```
-2003 - Ведовством Фрагментов (Compilation)
-  ->
-2003 - Vedovstvom Fragmentov (Ведовством Фрагментов) (Compilation)
-```
+## Mapa modułów
 
-Wcześniejszy błąd polegał na tym, że dopisek nie był wycinany przed transliteracją,
-więc trafiał do części cyrylickiej w nawiasie i był doklejany drugi raz osobno,
-dając np. `... (Compilation) (Ведовством Фрагментов (Compilation))`.
+- `main` - ustawia UTF-8 konsoli, uruchamia `process_directory` od katalogu, w którym
+  leży plik `.py`, czeka na Enter przed zamknięciem okna.
+- `process_directory` - rekurencyjny przechód "od góry do dołu": najpierw zmienia nazwę
+  bieżącego katalogu (`rename_directory_if_needed`), dopiero potem wchodzi do podkatalogów
+  (żeby ścieżki dzieci odpowiadały już zmienionej nazwie rodzica), na końcu zmienia nazwy
+  plików w tym katalogu (`rename_files_in_directory` - tylko bieżący katalog, podkatalogi
+  obsłuży rekurencja).
+- `rename_directory_if_needed` - dla folderów `YYYY - Tytuł` (dopasowanych do
+  `ALBUM_PATTERN`) stosuje logikę roku + dopisku; dla pozostałych (np. folder zespołu,
+  folder gatunku) tłumaczy całą nazwę wprost przez `build_translated_title`.
+- `extract_trailing_suffix` - wycina jeden końcowy dopisek z `ALBUM_SUFFIXES` (patrz niżej)
+  PRZED transliteracją tytułu albumu, żeby nie trafił do części cyrylickiej w nawiasie.
+- `build_translated_title` / `is_already_translated` - budują `Łacinka (Cyrylica)` i chronią
+  przed ponownym przetworzeniem już przetłumaczonej nazwy (patrz inwarianty niżej).
+- `rename_files_in_directory` - pliki `.mp3`/`.jpg`/`.jpeg`/`.png` w jednym katalogu (nie
+  rekurencyjnie). Dla `NN - Tytuł.mp3` najpierw próbuje `build_cover_title` (specjalny
+  przypadek "cover"), inaczej `build_translated_title` na tytule. Dla pozostałych plików
+  (okładki) tłumaczy całą nazwę bez rozszerzenia.
+- `build_cover_title` / `extract_top_level_parentheses` - specjalna logika dla utworów z
+  dopiskiem zawierającym słowo "cover" w nawiasie. `TRAILING_AFTER_PARENS_PATTERN` chwyta
+  tekst za ostatnim domykającym nawiasem i dokleja go do tytułu przed transliteracją, żeby
+  nie zginął (np. "сложный" w `Песня (Ария cover) сложный`).
+- `is_already_translated_cover_title` - wywoływana na starcie `build_cover_title`, chroni
+  przed powtórnym przetworzeniem coveru z wykonawcą cyrylicą (patrz inwarianty niżej).
+- `transliterate_cyrillic` - transliteracja znak-po-znaku (dict `char -> string`), pokrywa
+  cyrylicę rosyjską, ukraińską (`І, Ї, Є, Ґ`) i białoruską (`Ў`).
 
-### Pliki utworów: `NN - Tytuł.mp3`
+## Nieoczywiste inwarianty
 
-Rozpoznawane wzorcem `^(\d{2})\s-\s(.+)$`. Tytuł tłumaczony jak w folderach:
-`NN - TytułŁac (TytułCyr).mp3`.
+- `ALBUM_SUFFIXES` (`Compilation, Single, Live, Split, 2CD, 3CD, 4CD, 5CD`) musi pozostawać
+  zgodny z listą tagów w `PrepareFoldersAndFilesNames` (`folderNameKeepTagsRegex`, krok 2
+  pipeline'u). Jeśli tam ktoś doda nowy tag, dodaj go też tutaj — inaczej wraca stary bug
+  (dopisek trafia do części cyrylickiej i dubluje się na końcu nazwy).
+- `extract_trailing_suffix` musi działać na tytule PRZED wywołaniem `transliterate_cyrillic`.
+  Kolejność `strip suffix -> transliterate base -> doklej suffix na końcu` jest tu kluczowa.
+- `is_already_translated` rozpoznaje kształt `Lat (Cyr)`, gdzie `Lat` nie ma cyrylicy, a
+  transliteracja `Cyr` dokładnie odtwarza `Lat` — to jedyna ochrona przed powtórnym
+  przetworzeniem przy ponownym uruchomieniu dla zwykłych nazw. Nie naprawia nazw już
+  zepsutych przez starą wersję programu (zagnieżdżone/zdublowane dopiski) — te trzeba
+  poprawić ręcznie.
+- Rename katalogów idzie od najgłębszych rodziców do dzieci (`process_directory`
+  rekurencyjnie renameuje rodzica, potem woła się na już zaktualizowanej ścieżce) —
+  odwrotna kolejność unieważniłaby ścieżki dzieci.
+- Katalog główny (folder ze skryptem) nigdy nie jest zmieniany (`is_root=True` pomija
+  rename).
+- `build_cover_title` jest wywoływana tylko, gdy tytuł utworu zawiera słowo "cover" - w
+  innym wypadku standardowa ścieżka `build_translated_title`.
+- `is_already_translated_cover_title` rozpoznaje kształt `Lat (CoverLat) (Cyr (CoverCyr))`
+  (cover z wykonawcą cyrylicą) - ogólna `is_already_translated` go nie widzi, bo
+  `extract_top_level_parentheses` gubi domykający nawias przy zagnieżdżeniu. Bez tej
+  osobnej ochrony powtórne uruchomienie rozdymywało nazwę w nieskończoność.
 
-Wyjątek: jeśli tytuł zawiera słowo „cover” w nawiasie, uruchamiana jest specjalna
-logika (`BuildCoverTitle`) budująca nazwę w stylu
-`NN - TytułŁac (Zespół cover) (TytułCyr (ZespółCyr cover))`.
+## Aktualizacja dokumentów
 
-### Pozostałe pliki (okładki: jpg/png/jpeg)
+Aktualizuj dokumenty tylko w zakresie zmiany. Pisz o aktualnym stanie, bez historii typu
+„wcześniej było X”.
 
-Cała nazwa (bez rozszerzenia) traktowana jest jak tytuł i tłumaczona:
-`NazwaŁac (NazwaCyr).jpg`.
-
-## Bezpieczeństwo wielokrotnego uruchomienia (idempotencja)
-
-Program rozpoznaje, że nazwa jest **już przetłumaczona** (ma postać `Lat (Cyr)`,
-gdzie `Lat` nie zawiera cyrylicy, a transliteracja `Cyr` dokładnie odtwarza `Lat`) i
-wtedy niczego nie zmienia. Dzięki temu ponowne uruchomienie na już przetworzonym
-folderze jest bezpieczne i nie tworzy zagnieżdżonych, zdublowanych nazw.
-
-Uwaga: ta ochrona działa tylko dla nazw utworzonych przez tę wersję programu.
-Nazwy uszkodzone przez starą, wadliwą wersję (podwójne dopiski typu
-`... (Compilation) (Cyrylica (Compilation))`) nie zostaną automatycznie naprawione
-— wymagałoby to osobnej, jednorazowej logiki naprawczej.
-
-## Transliteracja
-
-Prosta transliteracja znak-po-znaku (`TransliterateCyrillic`) — słownik `char -> string`
-obejmujący cyrylicę rosyjską, ukraińską (`І, Ї, Є, Ґ`) i białoruską (`Ў`). Znaki
-spoza mapy (litery łacińskie, cyfry, spacje, nawiasy) przechodzą bez zmian.
-
-## Znane ograniczenia / możliwe rozszerzenia na przyszłość
-
-- Rozpoznawane dopiski albumów są zaszyte na sztywno w `AlbumSuffixes`
-  (`Live`, `Compilation`, `Split`). Dodanie kolejnego wymaga edycji tej tablicy.
-- Jeśli w bibliotece pojawią się już wcześniej uszkodzone nazwy (sprzed tej
-  poprawki), trzeba je poprawić ręcznie albo napisać jednorazowy skrypt naprawczy
-  — program celowo ich nie rusza, żeby nie zgadywać błędnie na krzywych danych.
+- Zmiana zachowania programu, reguł nazewnictwa albo sposobu użycia: aktualizuj `Dokumentacja.md`.
+- Nowa zasada pracy agenta, zmiana mapy kodu albo inwariantu technicznego:
+  aktualizuj ten plik.
