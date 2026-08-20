@@ -109,12 +109,23 @@ nawiasy) przechodzą bez zmian, więc wielkość liter w wyniku zależy od wielk
 oryginale cyrylickim (program nie poprawia kapitalizacji — tym zajmuje się krok 2,
 `PrepareFoldersAndFilesNames`).
 
+Mapa celuje w popularną ("dziennikarską") transliterację używaną m.in. przez metal-archives
+i Wikipedię, nie w transliterację naukową/urzędową (ISO 9, GOST, BGN/PCGN) — stąd konkretne
+wybory: `ь`/`ъ` → nic (pomijane, nie apostrof), `ё` → `e` (nie `yo`), `й` → `y` (nie `i`, np.
+`Толстой` → `Tolstoy`). Te wybory są celowe: mają dawać wynik zgodny z tym, jak zespoły i
+bazy danych po angielsku zapisują rosyjskie nazwy, żeby transliterowana nazwa była
+wyszukiwalna.
+
 ## Znane ograniczenia
 
 - Lista rozpoznawanych dopisków albumu jest zaszyta na sztywno w kodzie. Jeśli
   `PrepareFoldersAndFilesNames` zacznie rozpoznawać nowy tag, trzeba dodać go też tutaj.
 - Nazwy uszkodzone przez starą wersję programu (sprzed poprawki dopisków) nie są
   naprawiane automatycznie.
+- Foldery/pliki przetłumaczone starszą wersją mapy transliteracji (np. z apostrofem za
+  `ь` albo `i` za `й`) nie zostaną rozpoznane jako już przetłumaczone - program spróbuje
+  je przetłumaczyć ponownie, dublując nazwę. Wymaga to jednorazowej ręcznej poprawki nazw
+  w już przetworzonej kolekcji.
 - Tag ID3 nadawany później przez `Mp3TagsSetter` bierze nazwę folderu/pliku wprost - jeśli
   ten program przetłumaczył folder zespołu na `Zespół (Кириллица)`, dokładnie taki tekst
   trafi do pola Artist/AlbumArtist (podobnie Album weźmie tytuł łącznie z nawiasem

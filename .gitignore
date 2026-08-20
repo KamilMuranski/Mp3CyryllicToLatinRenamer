@@ -1,4 +1,1 @@
-bin/
-obj/
-.vs/
-Wersje/
+__pycache__/

@@ -66,11 +66,11 @@ CYRILLIC_MAP = {
     "Г": "G",
     "Д": "D",
     "Е": "E",
-    "Ё": "Yo",
+    "Ё": "E",
     "Ж": "Zh",
     "З": "Z",
     "И": "I",
-    "Й": "I",
+    "Й": "Y",
     "К": "K",
     "Л": "L",
     "М": "M",
@@ -89,7 +89,7 @@ CYRILLIC_MAP = {
     "Щ": "Shch",
     "Ъ": "",
     "Ы": "Y",
-    "Ь": "’",
+    "Ь": "",
     "Э": "E",
     "Ю": "Yu",
     "Я": "Ya",
@@ -100,11 +100,11 @@ CYRILLIC_MAP = {
     "г": "g",
     "д": "d",
     "е": "e",
-    "ё": "yo",
+    "ё": "e",
     "ж": "zh",
     "з": "z",
     "и": "i",
-    "й": "i",
+    "й": "y",
     "к": "k",
     "л": "l",
     "м": "m",
@@ -123,7 +123,7 @@ CYRILLIC_MAP = {
     "щ": "shch",
     "ъ": "",
     "ы": "y",
-    "ь": "’",
+    "ь": "",
     "э": "e",
     "ю": "yu",
     "я": "ya",
@@ -464,11 +464,26 @@ def setup_console() -> None:
 
 def wait_for_key() -> None:
     """
-    Trzyma okno konsoli otwarte po dwukliku. Przy uruchomieniu z potoku albo ze
-    skryptu (brak wejścia) kończy od razu - input() zgłasza wtedy EOFError.
+    Trzyma okno konsoli otwarte po dwukliku - reaguje na dowolny klawisz, nie tylko
+    Enter (jak w wersji C#). Przy uruchomieniu z potoku albo ze skryptu (brak
+    interaktywnego wejścia) kończy od razu, żeby nie zawiesić automatyzacji.
     """
+    print("Gotowe. Naciśnij dowolny klawisz, aby zamknąć okno...")
+
+    if not sys.stdin.isatty():
+        return
+
+    if sys.platform == "win32":
+        try:
+            import msvcrt
+
+            msvcrt.getch()
+            return
+        except OSError:
+            pass
+
     try:
-        input("Gotowe. Naciśnij Enter, aby zamknąć okno...")
+        input()
     except (EOFError, KeyboardInterrupt):
         print()
 

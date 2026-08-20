@@ -74,7 +74,9 @@ nie bug w nim samym.
 - `is_already_translated_cover_title` - wywoływana na starcie `build_cover_title`, chroni
   przed powtórnym przetworzeniem coveru z wykonawcą cyrylicą (patrz inwarianty niżej).
 - `transliterate_cyrillic` - transliteracja znak-po-znaku (dict `char -> string`), pokrywa
-  cyrylicę rosyjską, ukraińską (`І, Ї, Є, Ґ`) i białoruską (`Ў`).
+  cyrylicę rosyjską, ukraińską (`І, Ї, Є, Ґ`) i białoruską (`Ў`). Mapa celuje w popularną
+  konwencję (metal-archives/Wikipedia), nie naukową: `ь`/`ъ` → `""`, `ё` → `e`, `й` → `y`
+  (nie `i`, żeby np. `Толстой` dało `Tolstoy`, nie `Tolstoi`).
 
 ## Nieoczywiste inwarianty
 
