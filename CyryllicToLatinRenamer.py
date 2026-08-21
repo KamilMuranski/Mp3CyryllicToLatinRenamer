@@ -56,6 +56,17 @@ CYRILLIC_PATTERN = re.compile(r"[Ѐ-ӿԀ-ԯ]")
 
 SUPPORTED_EXTENSIONS = (".mp3", ".jpg", ".jpeg", ".png")
 
+# Ustawiane przez report_error() - main() na tej podstawie decyduje, czy okno ma
+# czekać na klawisz (błąd do przeczytania), czy zamknąć się od razu.
+_had_errors = False
+
+
+def report_error(message: str) -> None:
+    """Wypisuje błąd na stderr i zapamiętuje, że wystąpił (patrz main())."""
+    global _had_errors
+    _had_errors = True
+    print(message, file=sys.stderr)
+
 # --- Transliteracja ----------------------------------------------------------
 
 CYRILLIC_MAP = {
@@ -370,7 +381,8 @@ def rename_directory_if_needed(path: Path) -> Path:
     try:
         os.rename(path, new_path)
     except OSError as ex:
-        print(f"Błąd zmiany nazwy folderu '{path}' -> '{new_path}': {ex}", file=sys.stderr)
+        # ex zawiera już obie ścieżki (src -> dst) - nie powtarzaj ich w treści komunikatu
+        report_error(f"Błąd zmiany nazwy folderu: {ex}")
         return path  # kontynuuj z oryginalną ścieżką
 
     print(f"[DIR] {name} -> {new_name}")
@@ -389,7 +401,7 @@ def rename_files_in_directory(directory: Path) -> None:
             key=lambda p: p.name,
         )
     except OSError as ex:
-        print(f"Błąd listowania plików w '{directory}': {ex}", file=sys.stderr)
+        report_error(f"Błąd listowania plików w '{directory}': {ex}")
         return
 
     for path in files:
@@ -415,7 +427,8 @@ def rename_files_in_directory(directory: Path) -> None:
         try:
             os.rename(path, new_path)
         except OSError as ex:
-            print(f"Błąd zmiany nazwy pliku '{path}' -> '{new_path}': {ex}", file=sys.stderr)
+            # ex zawiera już obie ścieżki (src -> dst) - nie powtarzaj ich w treści komunikatu
+            report_error(f"Błąd zmiany nazwy pliku: {ex}")
             continue
 
         print(f"[FILE] {file_name} -> {new_file_name}")
@@ -432,7 +445,7 @@ def process_directory(directory: Path, is_root: bool) -> None:
     try:
         sub_dirs = sorted((p for p in current.iterdir() if p.is_dir()), key=lambda p: p.name)
     except OSError as ex:
-        print(f"Błąd listowania katalogów w '{current}': {ex}", file=sys.stderr)
+        report_error(f"Błąd listowania katalogów w '{current}': {ex}")
         return
 
     for sub in sub_dirs:
@@ -464,11 +477,13 @@ def setup_console() -> None:
 
 def wait_for_key() -> None:
     """
-    Trzyma okno konsoli otwarte po dwukliku - reaguje na dowolny klawisz, nie tylko
-    Enter (jak w wersji C#). Przy uruchomieniu z potoku albo ze skryptu (brak
-    interaktywnego wejścia) kończy od razu, żeby nie zawiesić automatyzacji.
+    Trzyma okno konsoli otwarte po dwukliku, żeby użytkownik zobaczył komunikaty
+    błędów - wywoływana z main() tylko, gdy podczas przetwarzania coś się nie
+    powiodło. Reaguje na dowolny klawisz, nie tylko Enter (jak w wersji C#). Przy
+    uruchomieniu z potoku albo ze skryptu (brak interaktywnego wejścia) kończy od
+    razu, żeby nie zawiesić automatyzacji.
     """
-    print("Gotowe. Naciśnij dowolny klawisz, aby zamknąć okno...")
+    print("Wystąpiły błędy (patrz powyżej). Naciśnij dowolny klawisz, aby zamknąć okno...")
 
     if not sys.stdin.isatty():
         return
@@ -497,9 +512,13 @@ def main() -> int:
     try:
         process_directory(root, is_root=True)
     except Exception as ex:  # noqa: BLE001 - świadomy catch-all, jak w wersji C#
-        print(f"Błąd ogólny: {ex}", file=sys.stderr)
+        report_error(f"Błąd ogólny: {ex}")
 
-    wait_for_key()
+    if _had_errors:
+        wait_for_key()
+    else:
+        print("Gotowe, bez błędów.")
+
     return 0
 
 

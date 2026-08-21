@@ -135,8 +135,10 @@ wyszukiwalna.
 
 Program jest jednym plikiem `CyryllicToLatinRenamer.py`. Skopiuj go do folderu, od którego ma
 zacząć (np. do katalogu z gatunkami albo do jednego gatunku) i kliknij dwukrotnie — Windows
-uruchomi go zarejestrowanym `py.exe`, przetworzy drzewo i poczeka na Enter przed zamknięciem
-okna. Nie ma żadnego kroku budowania i nie trzeba nic instalować poza Pythonem (3.9+).
+uruchomi go zarejestrowanym `py.exe` i przetworzy drzewo. Jeśli nie wystąpił żaden błąd, okno
+zamyka się sam po zakończeniu; jeśli któraś operacja się nie powiodła (błąd widoczny na
+konsoli), okno zostaje otwarte i czeka na dowolny klawisz, żeby było czas na przeczytanie
+komunikatu. Nie ma żadnego kroku budowania i nie trzeba nic instalować poza Pythonem (3.9+).
 
 Katalogiem roboczym jest **folder, w którym leży plik `.py`**, a nie bieżąca ścieżka
 terminala — nazwę pliku można dowolnie zmieniać (np. `3 - CyryllicToLatinRenamer.py`, żeby

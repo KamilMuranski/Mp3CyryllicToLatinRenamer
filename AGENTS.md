@@ -50,7 +50,10 @@ nie bug w nim samym.
 ## Mapa modułów
 
 - `main` - ustawia UTF-8 konsoli, uruchamia `process_directory` od katalogu, w którym
-  leży plik `.py`, czeka na Enter przed zamknięciem okna.
+  leży plik `.py`; wywołuje `wait_for_key` (czeka na dowolny klawisz) tylko, jeśli
+  `report_error` ustawiło `_had_errors` - inaczej okno zamyka się od razu.
+- `report_error` - jedyne miejsce wypisujące błędy na stderr; ustawia globalny
+  `_had_errors`, na podstawie którego `main` decyduje, czy okno ma czekać na klawisz.
 - `process_directory` - rekurencyjny przechód "od góry do dołu": najpierw zmienia nazwę
   bieżącego katalogu (`rename_directory_if_needed`), dopiero potem wchodzi do podkatalogów
   (żeby ścieżki dzieci odpowiadały już zmienionej nazwie rodzica), na końcu zmienia nazwy
@@ -94,6 +97,9 @@ nie bug w nim samym.
 - Rename katalogów idzie od najgłębszych rodziców do dzieci (`process_directory`
   rekurencyjnie renameuje rodzica, potem woła się na już zaktualizowanej ścieżce) —
   odwrotna kolejność unieważniłaby ścieżki dzieci.
+- Każdy błąd zgłaszany do użytkownika musi iść przez `report_error`, nigdy przez gołe
+  `print(..., file=sys.stderr)` — inaczej `main` nie ustawi `_had_errors` i okno zamknie
+  się od razu, mimo że wystąpił błąd do przeczytania.
 - Katalog główny (folder ze skryptem) nigdy nie jest zmieniany (`is_root=True` pomija
   rename).
 - `build_cover_title` jest wywoływana tylko, gdy tytuł utworu zawiera słowo "cover" - w
