@@ -12,8 +12,9 @@ reguł nazewnictwa albo trzeba zweryfikować format nazw wejściowych/wyjściowy
 - Kod i stringi aplikacji pisz po angielsku (poza polskimi komunikatami konsoli, które już
   tam są). Rozmowę prowadź po polsku.
 - Nie dodawaj mechanizmów naprawy plików/folderów zepsutych przez starą wersję programu
-  (podwójne dopiski typu `... (Compilation) (Cyrylica (Compilation))`). To osobne zadanie
-  naprawcze na danych, nie zmiana kodu.
+  (podwójne dopiski typu `... (Compilation) (Cyrylica (Compilation))`) do
+  `CyryllicToLatinRenamer.py`. Naprawa danych to osobne narzędzie:
+  `CyryllicToLatinRenamerRevert.py` (patrz niżej).
 - Program działa na realnych plikach pod katalogiem, w którym leży. Do testów manualnych
   używaj kopii danych, nigdy jedynej kopii kolekcji użytkownika.
 - Nie twórz cache ani artefaktów testowych w tym folderze.
@@ -29,6 +30,10 @@ reguł nazewnictwa albo trzeba zweryfikować format nazw wejściowych/wyjściowy
 - Aplikacja konsolowa, jeden plik `CyryllicToLatinRenamer.py`, czysta biblioteka
   standardowa Pythona (3.9+). Zero zależności, zero budowania - uruchamiana dwuklikiem
   (Windows odpala ją zarejestrowanym `py.exe`).
+- Obok leży niezależne narzędzie naprawcze `CyryllicToLatinRenamerRevert.py` (te same
+  założenia: jeden plik, stdlib, dwuklik, katalog pliku `.py` jako korzeń). Nie importuje
+  programu głównego i nie jest przez niego importowane - kopia potrzebnych wzorców jest
+  świadoma, żeby oba pliki dały się kopiować pojedynczo.
 - Katalogiem roboczym jest folder, w którym leży uruchomiony plik `.py`
   (`Path(__file__).resolve().parent`) - nie bieżący katalog terminala. Nazwę pliku można
   dowolnie zmieniać (np. dopisać prefiks numeru kroku pipeline'u).
@@ -108,6 +113,33 @@ nie bug w nim samym.
   (cover z wykonawcą cyrylicą) - ogólna `is_already_translated` go nie widzi, bo
   `extract_top_level_parentheses` gubi domykający nawias przy zagnieżdżeniu. Bez tej
   osobnej ochrony powtórne uruchomienie rozdymywało nazwę w nieskończoność.
+
+## Narzędzie naprawcze `CyryllicToLatinRenamerRevert.py`
+
+Odwraca nazwy `Łacinka (Cyrylica)` do samego oryginału z nawiasu, żeby dało się puścić
+aktualny program główny na kolekcji ponazywanej jego starszą wersją. Zachowanie od strony
+użytkownika opisuje `Dokumentacja.md`.
+
+- `revert_title` - serce narzędzia. Oryginałem jest OSTATNI nawias najwyższego poziomu
+  zawierający cyrylicę; nawiasy za nim (dopisek albumu, dopisek covera) są doklejane z
+  powrotem. Zwraca status `REVERTED` / `SKIP` / `UNMATCHED`.
+- `split_top_level_parentheses` - odpowiednik `extract_top_level_parentheses` z programu
+  głównego, ale BEZ jego buga: zachowuje domykający nawias zagnieżdżony i zwraca też tekst
+  za ostatnim nawiasem. Nazwa z niezbalansowanymi nawiasami wraca bez grup (nie ruszamy jej).
+- `latin_matches_cyrillic` + `TRANSLITERATION_VARIANTS` - jedyne zabezpieczenie przed
+  skasowaniem sensownej nazwy: część łacińska musi być dopuszczalną transliteracją nawiasu.
+  Mapa wariantów jest celowo szersza niż `CYRILLIC_MAP` programu głównego (apostrof za
+  `ь`/`ъ`, `yo` za `ё`, `i` za `й`, `h` za `х`...), bo ma rozpoznawać też zapisy starszych
+  wersji. Dopasowanie idzie zbiorem osiągalnych pozycji (jeden znak cyrylicy = różna liczba
+  liter łacińskich), nie znak po znaku. Poszerzając mapę pamiętaj, że każdy nowy wariant
+  podnosi ryzyko fałszywego trafienia - np. `01 - Song (Ария cover).mp3` MUSI zostać
+  nietknięty.
+- `UNMATCHED` idzie przez `report_warning` (osobny `_had_warnings`), nie `report_error` -
+  to nie błąd, ale okno musi zostać otwarte, bo taka nazwa wymaga oka użytkownika.
+- `rename_to` nigdy nie nadpisuje istniejącej nazwy (sprawdza `new_path.exists()` przed
+  `os.rename`) - kolizja to `report_error` i pominięcie, nigdy utrata pliku.
+- Przechód drzewa (`process_directory`, `is_root`, kolejność rodzic-przed-dziećmi) jest
+  taki sam jak w programie głównym.
 
 ## Aktualizacja dokumentów
 

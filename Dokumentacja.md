@@ -121,15 +121,55 @@ wyszukiwalna.
 - Lista rozpoznawanych dopisków albumu jest zaszyta na sztywno w kodzie. Jeśli
   `PrepareFoldersAndFilesNames` zacznie rozpoznawać nowy tag, trzeba dodać go też tutaj.
 - Nazwy uszkodzone przez starą wersję programu (sprzed poprawki dopisków) nie są
-  naprawiane automatycznie.
+  naprawiane automatycznie — służy do tego osobne narzędzie, patrz niżej.
 - Foldery/pliki przetłumaczone starszą wersją mapy transliteracji (np. z apostrofem za
   `ь` albo `i` za `й`) nie zostaną rozpoznane jako już przetłumaczone - program spróbuje
-  je przetłumaczyć ponownie, dublując nazwę. Wymaga to jednorazowej ręcznej poprawki nazw
-  w już przetworzonej kolekcji.
+  je przetłumaczyć ponownie, dublując nazwę. Takie nazwy trzeba najpierw cofnąć narzędziem
+  opisanym niżej.
 - Tag ID3 nadawany później przez `Mp3TagsSetter` bierze nazwę folderu/pliku wprost - jeśli
   ten program przetłumaczył folder zespołu na `Zespół (Кириллица)`, dokładnie taki tekst
   trafi do pola Artist/AlbumArtist (podobnie Album weźmie tytuł łącznie z nawiasem
   cyrylickim). To świadomy kompromis, nie błąd tego programu.
+
+## Narzędzie naprawcze: przywracanie oryginalnych nazw
+
+`CyryllicToLatinRenamerRevert.py` to osobny skrypt, który robi dokładnie odwrotną rzecz:
+z nazwy `Łacinka (Cyrylica)` zostawia sam oryginał z nawiasu. Działa tak samo jak program
+główny — kopiujesz go do folderu, od którego ma zacząć, klikasz dwukrotnie i przechodzi
+rekurencyjnie wszystkie podfoldery (sam katalog skryptu zostaje bez zmian).
+
+Po co: żeby naprawić kolekcję ponazywaną starszą wersją programu. Cofasz nazwy do
+oryginałów cyrylicą, a potem puszczasz aktualny `CyryllicToLatinRenamer.py` i dostajesz
+nazwy zgodne z jego dzisiejszymi regułami.
+
+Co odwraca:
+
+```
+Temnozor (Темнозорь)                                       -> Темнозорь
+1998 - Vedovstvom Fragmentov (Ведовством Фрагментов)       -> 1998 - Ведовством Фрагментов
+2003 - Vedovstvom Fragmentov (Ведовством Фрагментов) (Compilation)
+                                                           -> 2003 - Ведовством Фрагментов (Compilation)
+01 - Stenka (Ariya cover) (Стенка (Ария cover)).mp3        -> 01 - Стенка (Ария cover).mp3
+```
+
+Oryginałem jest ostatni nawias najwyższego poziomu zawierający cyrylicę; dopiski stojące
+za nim (`(Live)`, `(Compilation)`, `(Nazwa cover)`) wracają na koniec nazwy, a rok i numer
+utworu nie są ruszane. Radzi sobie też z nazwami zdublowanymi przez starą wersję
+(`... (Compilation) (Cyrylica (Compilation))`).
+
+Czego nie rusza: nazw bez cyrylicy, nazw już oryginalnych (cyrylica przed nawiasem) i
+nazw, w których część łacińska **nie jest** transliteracją tego nawiasu — np.
+`01 - Song (Ария cover).mp3` (nigdy nie tłumaczony tytuł, cyrylica tylko w dopisku
+covera) zostaje bez zmian. Dopuszczalne są przy tym zapisy ze starszych wersji mapy
+(apostrof za `ь`, `yo` za `ё`, `i` za `й`, `h` za `х`...), dzięki czemu `Tolstoi (Толстой)`
+też zostanie cofnięty do `Толстой`.
+
+Każda nazwa, która wygląda na przetłumaczoną, ale nie przeszła tego sprawdzenia, jest
+wypisywana jako `Nie rozpoznano ... - sprawdź ręcznie` i pozostaje nietknięta. Skrypt
+nigdy nie nadpisuje istniejącej nazwy — kolizję (np. w folderze leży już plik o nazwie
+oryginalnej) zgłasza i pomija. Okno zostaje otwarte, jeśli był jakikolwiek błąd albo
+nierozpoznana nazwa; przy czystym przebiegu zamyka się samo. Ponowne uruchomienie jest
+bezpieczne (nazwa już cofnięta jest pomijana).
 
 ## Uruchomienie
 
